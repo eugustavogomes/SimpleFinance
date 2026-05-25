@@ -9,20 +9,22 @@ using DotNetEnv;
 using System.Text.Json.Serialization;
 
 var builder = WebApplication.CreateBuilder(args);
+
+var frontendUrl = builder.Configuration["FRONTEND_URL"] ?? "http://localhost:3000";
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("SecurePolicy", policy =>
-        policy.WithOrigins(
-                "http://localhost:3000"
-            )
+        policy.WithOrigins(frontendUrl)
             .WithMethods("GET", "POST", "PUT", "DELETE")
             .WithHeaders("Authorization", "Content-Type")
     );
 });
 
+var connectionString = Environment.GetEnvironmentVariable("DATABASE_URL")
+    ?? builder.Configuration.GetConnectionString("DefaultConnection");
 
 builder.Services.AddDbContext<ApplicationDbContext>(options =>
-    options.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection"))
+    options.UseNpgsql(connectionString)
            .UseSnakeCaseNamingConvention());
 
 builder.Services.AddControllers()
@@ -51,14 +53,22 @@ Env.Load();
 builder.Services.AddJwtAuthentication(builder.Configuration);
 
 var app = builder.Build();
-app.UseCors("SecurePolicy");
 
+using (var scope = app.Services.CreateScope())
+{
+    var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+    db.Database.Migrate();
+}
+
+app.UseCors("SecurePolicy");
 app.UseMiddleware<ExceptionHandlingMiddleware>();
 
-app.UseHttpsRedirection();
+if (app.Environment.IsDevelopment())
+    app.UseHttpsRedirection();
+
 app.UseAuthentication();
 app.UseAuthorization();
-
 app.MapControllers();
 
-app.Run();
+var port = Environment.GetEnvironmentVariable("PORT") ?? "8080";
+app.Run($"http://0.0.0.0:{port}");
