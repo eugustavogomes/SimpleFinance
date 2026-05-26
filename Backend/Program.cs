@@ -20,20 +20,34 @@ builder.Services.AddCors(options =>
     );
 });
 
-var connectionString = ParseConnectionString(
-    Environment.GetEnvironmentVariable("DATABASE_URL")
-    ?? builder.Configuration.GetConnectionString("DefaultConnection")
-    ?? throw new Exception("DATABASE_URL environment variable is not set.")
-);
+var connectionString = ResolveConnectionString(builder.Configuration);
 
-static string ParseConnectionString(string value)
+static string ResolveConnectionString(IConfiguration config)
 {
-    if (!value.StartsWith("postgres://") && !value.StartsWith("postgresql://"))
-        return value;
+    var url = Environment.GetEnvironmentVariable("DATABASE_URL")
+              ?? config.GetConnectionString("DefaultConnection");
 
-    var uri = new Uri(value);
-    var userInfo = uri.UserInfo.Split(':');
-    return $"Host={uri.Host};Port={uri.Port};Database={uri.AbsolutePath.TrimStart('/')};Username={userInfo[0]};Password={userInfo[1]};SSL Mode=Require;Trust Server Certificate=true";
+    if (!string.IsNullOrWhiteSpace(url))
+    {
+        if (url.StartsWith("postgres://") || url.StartsWith("postgresql://"))
+        {
+            var uri = new Uri(url.Replace("postgres://", "postgresql://"));
+            var parts = uri.UserInfo.Split(':');
+            return $"Host={uri.Host};Port={uri.Port};Database={uri.AbsolutePath.TrimStart('/')};Username={parts[0]};Password={Uri.UnescapeDataString(parts[1])};SSL Mode=Require;Trust Server Certificate=true";
+        }
+        return url;
+    }
+
+    var pgHost = Environment.GetEnvironmentVariable("PGHOST");
+    var pgPort = Environment.GetEnvironmentVariable("PGPORT") ?? "5432";
+    var pgDb   = Environment.GetEnvironmentVariable("PGDATABASE");
+    var pgUser = Environment.GetEnvironmentVariable("PGUSER");
+    var pgPass = Environment.GetEnvironmentVariable("PGPASSWORD");
+
+    if (!string.IsNullOrWhiteSpace(pgHost))
+        return $"Host={pgHost};Port={pgPort};Database={pgDb};Username={pgUser};Password={pgPass};SSL Mode=Require;Trust Server Certificate=true";
+
+    throw new Exception("No database connection configured. Set DATABASE_URL or PGHOST/PGPORT/PGDATABASE/PGUSER/PGPASSWORD.");
 }
 
 builder.Services.AddDbContext<ApplicationDbContext>(options =>
