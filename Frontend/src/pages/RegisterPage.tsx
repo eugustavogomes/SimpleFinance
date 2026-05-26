@@ -42,7 +42,7 @@ export default function RegisterPage() {
       setSuccess("Account created successfully! Redirecting to login...");
       setTimeout(() => navigate("/login"), 2000);
     } catch (err: any) {
-      setError(err?.response?.data || "Registration failed");
+      setError(err?.response?.data?.error ?? err?.response?.data ?? "Registration failed");
     }
   }
 
