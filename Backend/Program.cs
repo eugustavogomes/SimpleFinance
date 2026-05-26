@@ -20,8 +20,21 @@ builder.Services.AddCors(options =>
     );
 });
 
-var connectionString = Environment.GetEnvironmentVariable("DATABASE_URL")
-    ?? builder.Configuration.GetConnectionString("DefaultConnection");
+var connectionString = ParseConnectionString(
+    Environment.GetEnvironmentVariable("DATABASE_URL")
+    ?? builder.Configuration.GetConnectionString("DefaultConnection")
+    ?? throw new Exception("DATABASE_URL environment variable is not set.")
+);
+
+static string ParseConnectionString(string value)
+{
+    if (!value.StartsWith("postgres://") && !value.StartsWith("postgresql://"))
+        return value;
+
+    var uri = new Uri(value);
+    var userInfo = uri.UserInfo.Split(':');
+    return $"Host={uri.Host};Port={uri.Port};Database={uri.AbsolutePath.TrimStart('/')};Username={userInfo[0]};Password={userInfo[1]};SSL Mode=Require;Trust Server Certificate=true";
+}
 
 builder.Services.AddDbContext<ApplicationDbContext>(options =>
     options.UseNpgsql(connectionString)
