@@ -87,6 +87,7 @@ _ReSharper*/
 /.vs/
 
 # --- Sensitive files ---
+appsettings.json
 appsettings.Development.json
 appsettings.Production.json
 appsettings.Staging.json
